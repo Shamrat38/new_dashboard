@@ -11,6 +11,9 @@ from datetime import timedelta
 from camera.models import Camera, CounterHistory
 from authentication.permissions import PeopleCountPermission
 from office.models import Office
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from django.http import StreamingHttpResponse, JsonResponse, HttpResponse, QueryDict
+from camera.serializers import CounterHistorySerializer
 
 import pytz
 from django.utils import timezone
@@ -44,13 +47,72 @@ def start_end_time_to_riyad(dt):
         return saudi_tz.localize(dt)
     return dt.astimezone(saudi_tz)
 
+@method_decorator(csrf_exempt, name='dispatch')
+class CreateCounterHistory(APIView):
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    def post(self, request, *args, **kwargs):
+        # Get the 'sn' from the request data
+        sn = request.data.get('sn')
+        if not sn:
+            return Response(
+                {"message": "Camera SN is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Try to get the camera based on the provided sn
+        try:
+            camera = Camera.objects.get(sn=sn)
+        except Camera.DoesNotExist:
+            return Response(
+                {"message": "Camera with the provided SN not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Create a mutable copy of the request data
+        if isinstance(request.data, QueryDict):
+            mutable_data = request.data.copy()
+        else:
+            mutable_data = request.data
+
+        # Add the camera ID to the mutable data
+        mutable_data['camera'] = camera.id
+
+        # Create the serializer with the updated data
+        serializer = CounterHistorySerializer(
+            data=mutable_data, context={"request": request})
+
+        # Validate and save the CounterHistory
+        if serializer.is_valid():
+            counter_history = serializer.save()
+
+            difference = counter_history.total_in - counter_history.total_out
+
+            if camera.office:
+                office = camera.office
+                office.staying += difference
+                office.save()
+
+            return Response(
+                {
+                    "message": "Counter History created successfully.",
+                    "data": serializer.data,
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
+        return Response(
+            {"message": "Invalid data", "errors": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
 class PeopleCountingCardView(APIView):
     permission_classes = [PeopleCountPermission]
 
     def get(self, request):
         user = request.user
         """
-        Get counter statistics for all tents or for specific tents if tent_ids are provided.
+        Get counter statistics for all offices or for specific offices if office_ids are provided.
         Optionally filter by date range using start_date_time and end_date_time.
         """
         office_ids = request.query_params.get('office_ids')
@@ -71,17 +133,17 @@ class PeopleCountingCardView(APIView):
             offices = Office.objects.filter(
                 company=request.user.company)
         else:
-            assigned_tent_ids = user.assigned_tent.values_list(
+            assigned_office_ids = user.assigned_office.values_list(
                 'id', flat=True)
             offices = Office.objects.filter(
-                id__in=assigned_tent_ids, company=request.user.company)
+                id__in=assigned_office_ids, company=request.user.company)
         if office_ids:
             try:
                 office_id_list = [int(tid.strip()) for tid in office_ids.split(
                     ',') if tid.strip().isdigit()]
                 offices = offices.filter(id__in=office_id_list)
             except ValueError:
-                return Response({"error": "Invalid tent_ids format. Use comma-separated integers."}, status=400)
+                return Response({"error": "Invalid office_ids format. Use comma-separated integers."}, status=400)
 
         result = []
 
@@ -127,7 +189,7 @@ class PeopleCountingCardView(APIView):
             current_percentage = round(
                 (current_staying / office.capacity) * 100, 2) if office.capacity else 0.00
 
-            tent_data = {
+            office_data = {
                 'id': office.id,
                 'name': office.name,
                 'capacity': office.capacity,
@@ -139,9 +201,9 @@ class PeopleCountingCardView(APIView):
                 "count": count
             }
 
-            result.append(tent_data)
+            result.append(office_data)
 
-        # serializer = TentCounterSerializer(result, many=True)
+        # serializer = OfficeCounterSerializer(result, many=True)
         return Response({
             "success": True,
             "message": "Camera list fetched successfully.",
@@ -178,9 +240,9 @@ class PeopleGraphView(APIView):
                 company=request.user.company)
 
         else:
-            assigned_office_ids = user.assigned_tent.values_list(
+            assigned_office_ids = user.assigned_office.values_list(
                 'id', flat=True)
-            tents = Office.objects.filter(
+            offices = Office.objects.filter(
                 id__in=assigned_office_ids, company=request.user.company)
 
         if office_ids:
@@ -189,7 +251,7 @@ class PeopleGraphView(APIView):
                     ',') if tid.strip().isdigit()]
                 offices = offices.filter(id__in=office_id_list)
             except ValueError:
-                return Response({"error": "Invalid tent_ids format. Use comma-separated integers."}, status=400)
+                return Response({"error": "Invalid office_ids format. Use comma-separated integers."}, status=400)
 
         # Generate 30-minute intervals
         # time_labels = []
@@ -198,7 +260,7 @@ class PeopleGraphView(APIView):
         #     time_labels.append(current_time)
         #     current_time += timedelta(minutes=5)
 
-        tent_staying_map = []
+        office_staying_map = []
         initial_aggregate = {}
         initial_total_in = 0
         initial_total_out = 0
@@ -254,7 +316,7 @@ class PeopleGraphView(APIView):
                 current_staying += (total_in - total_out)
                 data.append(current_staying)
 
-            tent_staying_map.append({
+            office_staying_map.append({
                 "office_id": office.id,
                 "office_name": office.name,
                 "office_capacity": office.capacity,
@@ -265,11 +327,11 @@ class PeopleGraphView(APIView):
 
         return Response({
             "success": True,
-            "message": "30-minute interval data per tent fetched successfully.",
+            "message": "30-minute interval data per office fetched successfully.",
             "start_date_time": start_date_time,
             "end_date_time": end_date_time,
             "initial_total_in": initial_total_in,
             "initial_total_out": initial_total_out,
 
-            "results": tent_staying_map
+            "results": office_staying_map
         }, status=status.HTTP_200_OK)

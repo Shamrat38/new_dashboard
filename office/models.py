@@ -12,7 +12,7 @@ class Country(BaseModel):
 
 class Office(BaseModel):
     company = models.ForeignKey(
-        Company, on_delete=models.CASCADE, null=True, blank=False, related_name="tent")
+        Company, on_delete=models.CASCADE, null=True, blank=False, related_name="office")
     name = models.CharField(max_length=255, null=False, blank=False)
     longitude = models.CharField(max_length=255, null=False, blank=False)
     latitude = models.CharField(max_length=255, null=False, blank=False)
@@ -23,8 +23,8 @@ class Office(BaseModel):
         "authentication.MyUser", on_delete=models.SET_NULL, null=True, blank=True
     )
 
-    tent_image = models.ImageField(
-        upload_to='images_tent/%Y/%m/%d/', blank=True, null=True)
+    office_image = models.ImageField(
+        upload_to='images_office/%Y/%m/%d/', blank=True, null=True)
 
     air_condition = models.IntegerField(null=True, blank=True)
     air_condition_update_time = models.DateTimeField(null=True, blank=True)
@@ -62,13 +62,13 @@ class Office(BaseModel):
     def __str__(self):
         company_name = self.company.name if self.company else "No Company"
         arafa = "Arafa" if self.is_arafa else "Mina"
-        return f"Tent Pk: {self.pk} -> Tent Name: {self.name} -> {arafa} -> Company: {company_name}"
+        return f"Office Pk: {self.pk} -> Office Name: {self.name} -> {arafa} -> Company: {company_name}"
 
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['company', 'name', 'is_arafa'], name='unique_company_tent_name')
+                fields=['company', 'name', 'is_arafa'], name='unique_company_office_name')
         ]
 
 

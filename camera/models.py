@@ -42,7 +42,7 @@ class Camera(BaseModel):
         if self.sn and self.office and self.office.company:
             existing = Camera.objects.filter(
                 sn=self.sn,
-                tent__company=self.office.company
+                office__company=self.office.company
             )
             if self.pk:
                 existing = existing.exclude(pk=self.pk)

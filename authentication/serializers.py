@@ -11,7 +11,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MyUser
-        fields = ["email", "username", "password", "password2", "tent_list", "company", "is_temperature", "is_guard",
+        fields = ["email", "username", "password", "password2", "office_list", "company", "is_temperature", "is_guard",
                   "is_peoplecount", "is_kitchen", "is_foodweight", "is_cleanness",
                   "is_buffet", "is_cleaners", "is_sentiment", "is_water_tank"]
         extra_kwargs = {
@@ -30,7 +30,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data.pop('password2', None)
-        office_list = validated_data.pop('tent_list', None)
+        office_list = validated_data.pop('office_list', None)
         company = validated_data.pop('company', None)
 
         # Extract permission fields separately
@@ -63,7 +63,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             try:
                 office_ids = [int(id.strip()) for id in office_list.split(",")]
                 offices = Office.objects.filter(id__in=office_ids)
-                user.assigned_tent.set(offices)
+                user.assigned_office.set(offices)
             except:
                 raise serializers.ValidationError("Invalid Office list")
 
@@ -78,8 +78,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         # Update core fields using parent implementation
         user = super().update(instance, validated_data)
 
-        # Update ManyToMany: assigned_tent
-        user.assigned_tent.clear()
+        # Update ManyToMany: assigned_office
+        user.assigned_office.clear()
         if office_list:
             try:
                 office_ids = [int(id.strip()) for id in office_list.split(",")]
@@ -87,7 +87,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
                 user.assigned_office.set(offices)
             except (ValueError, Office.DoesNotExist):
                 raise serializers.ValidationError(
-                    {"tent_list": "Invalid tent IDs provided"})
+                    {"office_list": "Invalid office IDs provided"})
         user.save()
         return user
     

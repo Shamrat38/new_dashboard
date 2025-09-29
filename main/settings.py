@@ -58,6 +58,8 @@ INSTALLED_APPS = [
     'office',
 ]
 
+AUTH_USER_MODEL = "authentication.MyUser"
+
 SPECTACULAR_SETTINGS = {
     'TITLE': 'New Dashboard API',
     'DESCRIPTION': 'Set of APIs for New Dashboard',
