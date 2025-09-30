@@ -8,7 +8,7 @@ from rest_framework import status
 from rest_framework.generics import GenericAPIView
 
 from authentication.serializers import UserRegistrationSerializer, UserLoginSerializer
-from authentication.utils import standard_response
+from authentication.utils import standard_response, get_token_for_user
 
 @method_decorator(csrf_exempt, name='dispatch')
 class UserRegistrationView(APIView):
