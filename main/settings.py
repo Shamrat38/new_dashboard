@@ -54,7 +54,7 @@ INSTALLED_APPS = [
 
     # my apps
     'authentication',
-    'camera',
+    'pilgrims',
     'office',
 ]
 

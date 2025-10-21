@@ -5,7 +5,7 @@ class PeopleCountPermission(BasePermission):
         if not user or not user.is_authenticated:
             return False
         if user.is_admin:
-            return user.company and user.company.is_peoplecount
+            return user.company
         if user.is_staff:
             return user.is_peoplecount
         return False

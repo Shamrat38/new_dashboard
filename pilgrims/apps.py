@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 
 
-class CameraConfig(AppConfig):
+class PilgrimsConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'camera'
+    name = 'pilgrims'

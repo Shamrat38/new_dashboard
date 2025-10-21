@@ -34,8 +34,7 @@ class PermissionModel(models.Model):
     is_buffet = models.BooleanField(default=False)  # buffet
     is_cleaners = models.BooleanField(default=False)  # clearners
     is_sentiment = models.BooleanField(default=False)  # sentiment
-    is_water_tank = models.BooleanField(
-        default=False)  # water_sensor, water_tank
+    is_water_tank = models.BooleanField(default=False)  # water_sensor, water_tank
     is_sensor_assign = models.BooleanField(default=False)
     is_annotator_ranking = models.BooleanField(default=False)
     is_settings = models.BooleanField(default=False)
@@ -43,7 +42,7 @@ class PermissionModel(models.Model):
     class Meta:
         abstract = True
 
-class Company(BaseModel, PermissionModel):
+class Company(BaseModel):
     name = models.CharField(max_length=255, unique=True)
     name_ar = models.CharField(max_length=255, blank=True)
     logo = models.ImageField(upload_to='company_logos/', null=True, blank=True)
@@ -51,14 +50,11 @@ class Company(BaseModel, PermissionModel):
     def __str__(self):
         return self.name
 
-
-class MyUser(AbstractBaseUser, PermissionModel):
-    company = models.ForeignKey(
-        Company, on_delete=models.CASCADE, null=True, blank=True, related_name="users")
+class MyUser(AbstractBaseUser):
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, null=True, blank=True, related_name="users")
     email = models.EmailField(verbose_name="email", max_length=60, unique=True)
     username = models.CharField(max_length=30, null=False, blank=False)
-    date_joined = models.DateTimeField(
-        verbose_name="date joined", auto_now_add=True)
+    date_joined = models.DateTimeField(verbose_name="date joined", auto_now_add=True)
     last_login = models.DateTimeField(verbose_name="last login", auto_now=True)
     is_admin = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
@@ -66,12 +62,8 @@ class MyUser(AbstractBaseUser, PermissionModel):
     is_superuser = models.BooleanField(default=False)
     is_annotator = models.BooleanField(default=False)
     company_annotator = models.ManyToManyField(Company, blank=True)
-    camera_type_annotator = models.ManyToManyField(
-        'camera.CameraType', blank=True)
-
     sensor_update_permission = models.BooleanField(default=False)
     assigned_office = models.ManyToManyField('office.Office', blank=True)
-
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["username"]
 
