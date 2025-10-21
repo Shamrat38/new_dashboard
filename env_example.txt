@@ -1,0 +1,16 @@
+# Django Environment Variables
+# Copy this file to .env and update the values for your server
+
+# Django Settings
+SECRET_KEY=your-secret-key-here
+DEBUG=False
+
+# Database Configuration
+DB_NAME=newdashboard_db
+DB_USER=neworangepi_user
+DB_PASSWORD=your-database-password
+DB_HOST=localhost
+DB_PORT=5432
+
+# Server Configuration
+ALLOWED_HOSTS=your-domain.com,www.your-domain.com
