@@ -13,7 +13,7 @@ class PilgrimSerializer(serializers.ModelSerializer):
             'office',
             'camera_count',
             'rfid_count',
-            'illegal_pilgrim',
+            'illegal_pilgrims',
             'time_stamp',
             'image',
             'image_url',
