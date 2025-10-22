@@ -33,6 +33,12 @@ class CameraCounterView(APIView):
             return Response({'error': 'Missing fields'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
+            camera_count = int(camera_count)
+        except ValueError:
+            return Response({'error': 'Invalid camera_count value'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        
+        try:
             camera = Camera.objects.get(sn=sn)
             office = camera.office
         except Camera.DoesNotExist:
@@ -56,7 +62,7 @@ class CameraCounterView(APIView):
 
             # ✅ Check illegal pilgrims
             if pilgrim.rfid_count is not None:
-                diff = pilgrim.camera_count - pilgrim.rfid_count
+                diff = int(pilgrim.camera_count) - int(pilgrim.rfid_count)
                 if diff > 0:
                     pilgrim.illegal_pilgrims = diff
                 else:
@@ -90,6 +96,12 @@ class RFIDCounterView(APIView):
             return Response({'error': 'Missing fields'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
+            rfid_count = int(rfid_count)
+        except ValueError:
+            return Response({'error': 'Invalid rfid_count value'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        
+        try:
             rfid = RFID.objects.get(sn=sn)
             office = rfid.office
         except RFID.DoesNotExist:
@@ -108,7 +120,7 @@ class RFIDCounterView(APIView):
 
             # ✅ Check illegal pilgrims
             if pilgrim.camera_count is not None:
-                diff = pilgrim.camera_count - pilgrim.rfid_count
+                diff = int(pilgrim.camera_count) - int(pilgrim.rfid_count)
                 if diff > 0:
                     pilgrim.illegal_pilgrims = diff
                 else:
