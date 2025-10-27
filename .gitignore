@@ -17,3 +17,6 @@ media/
 .vscode/
 .idea/
 
+# logs
+logs/
+*.log
