@@ -1,23 +1,24 @@
-from django.shortcuts import render
-from django.utils.dateparse import parse_datetime
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Sum
-from datetime import timedelta
 from .models import Camera, RFID, Pilgrim
-from authentication.permissions import PeopleCountPermission
-from office.models import Office
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from django.http import StreamingHttpResponse, JsonResponse, HttpResponse, QueryDict
 from .serializers import PilgrimSerializer
+from django.utils.dateparse import parse_datetime
+from datetime import datetime
 
 import pytz, os
-from django.utils import timezone
-from datetime import datetime, time
+
+saudi_tz = pytz.timezone('Asia/Riyadh')
+
+def start_end_time_to_riyad(dt):
+    if dt.tzinfo is None:
+        return saudi_tz.localize(dt)
+    return dt.astimezone(saudi_tz)
+
 
 @method_decorator(csrf_exempt, name='dispatch')
 class CameraCounterView(APIView):
@@ -140,3 +141,58 @@ class RFIDCounterView(APIView):
             {"message": "Data processed successfully.", "data": serializer.data},
             status=status.HTTP_201_CREATED,
         )
+        
+        
+class IlligalPilgrimsView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        """
+        GET:
+        - /pilgrims/illegal-pilgrims/?office=1,2,3&start_date=2025-10-20T00:00:00&end_date=2025-10-22T23:59:59
+        - /pilgrims/illegal-pilgrims/<id>/
+        """
+        office_param = request.GET.get("office")
+        start_date = request.GET.get("start_date")
+        end_date = request.GET.get("end_date")
+        pk = kwargs.get("pk", None)
+        if pk:
+            try:
+                pilgrim = Pilgrim.objects.get(pk=pk, illegal_pilgrims__gt=0)
+            except Pilgrim.DoesNotExist:
+                return Response({"error": "Pilgrim not found or not illegal."}, status=404)
+
+            serializer = PilgrimSerializer(pilgrim, context={"request": request})
+            return Response(serializer.data, status=200)
+        
+        # ⚠️ All filters mandatory
+        if not all([office_param, start_date, end_date]):
+            return Response(
+                {"error": "Missing required filters: office, start_date, end_date"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+            
+        # Parse multiple office IDs
+        try:
+            office_ids = [int(o.strip()) for o in office_param.split(",") if o.strip()]
+        except ValueError:
+            return Response({"error": "Invalid office parameter"}, status=400)
+
+        # Parse dates
+        start = parse_datetime(start_date)
+        end = parse_datetime(end_date)
+        if not (start and end):
+            return Response({"error": "Invalid date format"}, status=400)
+        
+        start = start_end_time_to_riyad(start)
+        end = start_end_time_to_riyad(end)
+
+        # ✅ Query only illegal pilgrims within range & office list
+        pilgrims = Pilgrim.objects.filter(
+            illegal_pilgrims__gt=0,
+            office_id__in=office_ids,
+            time_stamp__range=(start, end),
+        ).order_by("-time_stamp")
+
+        serializer = PilgrimSerializer(pilgrims, many=True, context={"request": request})
+        return Response(serializer.data, status=200)
