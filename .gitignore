@@ -20,3 +20,6 @@ media/
 # logs
 logs/
 *.log
+
+# FrontEnd
+frontend/

@@ -20,9 +20,6 @@ def start_end_time_to_riyad(dt):
     return dt.astimezone(saudi_tz)
 
 
-RIYADH_TZ = pytz.timezone("Asia/Riyadh")
-
-
 @method_decorator(csrf_exempt, name='dispatch')
 class CameraCounterView(APIView):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
@@ -30,56 +27,61 @@ class CameraCounterView(APIView):
     def post(self, request):
         sn = request.data.get('sn')
         camera_count = request.data.get('count')
-        time_str = request.data.get('time')
+        time_stamp = request.data.get('time_stamp')
         image = request.data.get('image')
 
-        if not all([sn, camera_count, time_str]):
+        if not all([sn, camera_count, time_stamp]):
             return Response({'error': 'Missing fields'}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         try:
             camera_count = int(camera_count)
         except ValueError:
             return Response({'error': 'Invalid camera_count value'}, status=status.HTTP_400_BAD_REQUEST)
+        
         
         try:
             camera = Camera.objects.get(sn=sn)
             office = camera.office
         except Camera.DoesNotExist:
             return Response({'error': 'Invalid Camera SN'}, status=status.HTTP_404_NOT_FOUND)
-        
-        # ⚡ Manual parsing and localization to Riyadh timezone
-        try:
-            time_obj = datetime.fromisoformat(time_str)
-        except ValueError:
-            return Response({'error': 'Invalid time format'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Localize to Riyadh if naive
-        if time_obj.tzinfo is None:
-            time_obj = RIYADH_TZ.localize(time_obj)
-        else:
-            time_obj = time_obj.astimezone(RIYADH_TZ)
-        
-        # Get or create Pilgrim record
+        time_obj = datetime.fromisoformat(time_stamp)
+
         pilgrim, created = Pilgrim.objects.get_or_create(
             office=office,
             time_stamp=time_obj,
             defaults={'camera_count': camera_count, 'image': image}
         )
 
-        # Update existing record if already exists
+        # Update existing
         if not created:
             pilgrim.camera_count = camera_count
 
-            # Temporary save image
+            # ⚙️ Temporary save the image
             if image:
                 pilgrim.image = image
 
-            # Optional: handle illegal pilgrims logic here (same as your original)
+            # ✅ Check illegal pilgrims
+            if pilgrim.rfid_count is not None:
+                diff = int(pilgrim.camera_count) - int(pilgrim.rfid_count)
+                if diff > 0:
+                    pilgrim.illegal_pilgrims = diff
+                else:
+                    pilgrim.illegal_pilgrims = 0
+                    # ❌ Remove image if exists and not illegal
+                    if pilgrim.image:
+                        image_path = pilgrim.image.path
+                        pilgrim.image.delete(save=False)
+                        if os.path.exists(image_path):
+                            os.remove(image_path)
+                        pilgrim.image = None
+
             pilgrim.save()
 
+        serializer = PilgrimSerializer(pilgrim, context={"request": request})
         return Response(
-            {"message": "Data processed successfully.", "data": PilgrimSerializer(pilgrim, context={"request": request}).data},
-            status=status.HTTP_201_CREATED
+            {"message": "Data processed successfully.", "data": serializer.data},
+            status=status.HTTP_201_CREATED,
         )
 
 @method_decorator(csrf_exempt, name='dispatch')
