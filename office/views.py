@@ -9,7 +9,7 @@ from .serializers import OfficeSerializer
 from pilgrims.models import Pilgrim
 from django.db.models import Sum
 from django.utils.dateparse import parse_datetime
-from django.utils.timezone import make_aware, is_aware
+from django.utils.timezone import make_aware, is_naive, is_aware
 import pytz
 from django.utils import timezone
 from datetime import datetime, time
@@ -32,10 +32,14 @@ def tent_name_list_dict_sorting(s):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', str(s))]
 
 
-def date_time_to_aware(date_time):
-    if not is_aware(date_time):
-        date_time = make_aware(date_time)
-    return date_time
+def date_time_to_aware(dt):
+    if dt is None:
+        return None
+    if is_naive(dt):
+        return saudi_tz.localize(dt)
+    return dt.astimezone(saudi_tz)
+
+
 class CustomPagination(PageNumberPagination):
     page_size = 10  # Default page size
     page_size_query_param = 'page_size'  # Allow clients to set their own page size
@@ -164,10 +168,10 @@ class DashboardIllegalPilgrims(APIView):
         if is_live:
             start_date_time, end_date_time = Current_saudi_time()
         else:
-            start_date_time = get_aware_datetime_from_str(
-                request.GET.get('start_date_time')) or timezone.now()
-            end_date_time = get_aware_datetime_from_str(
-                request.GET.get('end_date_time')) or timezone.now()
+            start_date_time = date_time_to_aware(parse_datetime(request.GET.get('start_date_time')) or timezone.now())
+                
+            end_date_time = date_time_to_aware(parse_datetime(request.GET.get('end_date_time')) or timezone.now())
+                
 
         results = []
         for office in offices:
