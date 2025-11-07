@@ -32,14 +32,16 @@ def tent_name_list_dict_sorting(s):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', str(s))]
 
 
-def to_riyadh(dt):
-    """Always convert datetime to Riyadh-aware datetime"""
+def to_aware_riyadh(dt):
     if dt is None:
         return None
-    if is_naive(dt):
-        return saudi_tz.localize(dt)
-    return dt.astimezone(saudi_tz)
 
+    # If string has no timezone, treat it as Saudi time
+    if dt.tzinfo is None:
+        return saudi_tz.localize(dt)
+
+    # Otherwise convert to Riyadh zone
+    return dt.astimezone(saudi_tz)
 
 class CustomPagination(PageNumberPagination):
     page_size = 10  # Default page size
@@ -144,21 +146,20 @@ class DashboardIllegalPilgrims(APIView):
             except ValueError:
                 return Response({"detail": "Invalid tent_list format"}, status=400)
 
-        # ✅ Decide date range
         if is_live:
-            # Last 30 minutes by default
-            end_date_time = timezone.now()
+            end_date_time = timezone.now().astimezone(saudi_tz)
             start_date_time = end_date_time - timezone.timedelta(minutes=30)
         else:
-            # Custom date range or default
-            start_date_time = to_riyadh(parse_datetime(start_raw)) if start_raw else None
-            end_date_time = to_riyadh(parse_datetime(end_raw)) if end_raw else None
+            start = parse_datetime(str(start_raw))  if start_raw else None
+            end = parse_datetime(str(end_raw))  if end_raw else None
 
-            # If one side is missing → default live range
+            start_date_time = to_aware_riyadh(start) if start else None
+            end_date_time = to_aware_riyadh(end) if end else None
+
+            # fallback live mode on missing any side
             if not start_date_time or not end_date_time:
-                end_date_time = timezone.now()
+                end_date_time = timezone.now().astimezone(saudi_tz)
                 start_date_time = end_date_time - timezone.timedelta(minutes=30)
-
         results = []
 
         for office in offices:
