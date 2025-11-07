@@ -128,7 +128,8 @@ class DashboardIllegalPilgrims(APIView):
         is_live = request.GET.get("is_live", "false").lower() == "true"
         start_raw = request.GET.get("start_date_time")
         end_raw = request.GET.get("end_date_time")
-
+        user_provided_date = start_raw and end_raw
+        
         user = request.user
 
         # ✅ Base query: only user's company offices
@@ -149,21 +150,14 @@ class DashboardIllegalPilgrims(APIView):
         if is_live:
             end_date_time = timezone.now().astimezone(saudi_tz)
             start_date_time = end_date_time - timezone.timedelta(minutes=30)
+
         else:
-            start = parse_datetime(str(start_raw))  if start_raw else None
-            end = parse_datetime(str(end_raw))  if end_raw else None
-
-            start_date_time = to_aware_riyadh(start) if start else None
-            end_date_time = to_aware_riyadh(end) if end else None
-
-            # fallback live mode on missing any side
-            if not start_date_time or not end_date_time:
-                end_date_time = timezone.now().astimezone(saudi_tz)
-                start_date_time = end_date_time - timezone.timedelta(minutes=30)
+            start_date_time = to_aware_riyadh(parse_datetime(start_raw)) if start_raw else None
+            end_date_time = to_aware_riyadh(parse_datetime(end_raw)) if end_raw else None
         results = []
 
         for office in offices:
-            if start_date_time and end_date_time:
+            if user_provided_date:
                 filtered_entries = Pilgrim.objects.filter(
                     office=office,
                     time_stamp__gte=start_date_time,
