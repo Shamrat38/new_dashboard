@@ -117,79 +117,78 @@ class OfficeApiView(APIView):
 
 
 class DashboardIllegalPilgrims(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = []  # <-- keep or replace based on your security
 
     def get(self, request):
 
-        nationality_param = request.GET.get("nationality", "all")
+        # Extract params
         office_list = request.GET.get("tent_list", None)
+        is_live = request.GET.get("is_live", "false").lower() == "true"
+        start_raw = request.GET.get("start_date_time")
+        end_raw = request.GET.get("end_date_time")
+
         user = request.user
 
-        offices = Office.objects.all()
+        # ✅ Base query: only user's company offices
+        if user.is_admin:
+            offices = Office.objects.filter(company=user.company)
+        else:
+            assigned_ids = user.assigned_office.values_list('id', flat=True)
+            offices = Office.objects.filter(id__in=assigned_ids, company=user.company)
 
-        # Filter nationality
-        if nationality_param.lower() != "all":
-            try:
-                nationality_ids = [int(x) for x in nationality_param.split(",") if x.strip().isdigit()]
-                offices = offices.filter(nationality__id__in=nationality_ids)
-            except ValueError:
-                return Response({"detail": "Invalid nationality list."}, status=400)
-
-        # Filter by tent_list if provided
+        # ✅ Optional tent_list filter
         if office_list:
             try:
-                office_ids = [int(tid) for tid in office_list.split(",") if tid.strip().isdigit()]
+                office_ids = [int(t) for t in office_list.split(",") if t.strip().isdigit()]
                 offices = offices.filter(id__in=office_ids)
             except ValueError:
-                return Response({"detail": "Invalid office_id list."}, status=400)
-        else:
-            # Restrict to logged-in user's access
-            if user.is_admin:
-                offices = offices.filter(company=user.company)
-            else:
-                assigned_ids = user.assigned_office.values_list("id", flat=True)
-                offices = offices.filter(id__in=assigned_ids, company=user.company)
+                return Response({"detail": "Invalid tent_list format"}, status=400)
 
-        # ========== ✅ DATETIME FILTER HANDLING (THE MAIN FIX) ==========
-        is_live = request.GET.get("is_live", "false").lower() == "true"
-
+        # ✅ Decide date range
         if is_live:
-            start_date_time, end_date_time = Current_saudi_time()
+            # Last 30 minutes by default
+            end_date_time = timezone.now()
+            start_date_time = end_date_time - timezone.timedelta(minutes=30)
         else:
-            start_raw = request.GET.get("start_date_time")
-            end_raw = request.GET.get("end_date_time")
+            # Custom date range or default
+            start_date_time = to_riyadh(parse_datetime(start_raw)) if start_raw else None
+            end_date_time = to_riyadh(parse_datetime(end_raw)) if end_raw else None
 
-            start_date_time = to_riyadh(parse_datetime(start_raw))
-            end_date_time = to_riyadh(parse_datetime(end_raw))
-
+            # If one side is missing → default live range
             if not start_date_time or not end_date_time:
-                return Response({"detail": "Invalid or missing start/end datetime"}, status=400)
+                end_date_time = timezone.now()
+                start_date_time = end_date_time - timezone.timedelta(minutes=30)
 
-        # ========== 📊 Fetch Data ==========
         results = []
 
         for office in offices:
-            filtered = Pilgrim.objects.filter(
+            filtered_entries = Pilgrim.objects.filter(
                 office=office,
-                time_stamp__range=(start_date_time, end_date_time)  # ✅ Date filtering now works!
+                time_stamp__gte=start_date_time,
+                time_stamp__lte=end_date_time,
             )
 
-            total_detected = filtered.aggregate(total=Sum("camera_count"))["total"] or 0
-            total_illegal = filtered.aggregate(total=Sum("illegal_pilgrims"))["total"] or 0
+            total_detect_by_camera = filtered_entries.aggregate(total=Sum("camera_count"))["total"] or 0
+            total_illegal_pilgrims = filtered_entries.aggregate(total=Sum("illegal_pilgrims"))["total"] or 0
+
+            indicator = "red" if total_illegal_pilgrims > 0 else "green"
 
             results.append({
                 "tent_id": office.id,
                 "tent_name": office.name,
-                "illegal_pilgrims": total_illegal,
-                "total_people": total_detected,
-                "indicator": "red" if total_illegal > 0 else "green",
-                "is_sensor_available": True
+                "illegal_pilgrims": total_illegal_pilgrims,
+                "total_people": total_detect_by_camera,
+                "indicator": indicator,
+                "is_sensor_available": True,
             })
 
-        results.sort(key=lambda x: tent_name_list_dict_sorting(x["tent_name"]))
-
-        return Response({
-            "success": True,
-            "message": "Dashboard Illegal Pilgrims Data",
-            "results": results
-        }, status=status.HTTP_200_OK)
+        return Response(
+            {
+                "success": True,
+                "message": "Dashboard Illegal Pilgrims Data",
+                "start_date_time": start_date_time,
+                "end_date_time": end_date_time,
+                "results": results,
+            },
+            status=status.HTTP_200_OK,
+        )
