@@ -174,8 +174,8 @@ class DashboardIllegalPilgrims(APIView):
 
             filtered_entries = Pilgrim.objects.filter(
                 office=office,
-                #time_stamp__gte=start_date_time,
-                #time_stamp__lte=end_date_time
+                time_stamp__gte=start_date_time,
+                time_stamp__lte=end_date_time
             )
             total_detect_by_camera = filtered_entries.aggregate(
                 total=Sum('camera_count'))['total'] or 0
