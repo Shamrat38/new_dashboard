@@ -163,11 +163,14 @@ class DashboardIllegalPilgrims(APIView):
         results = []
 
         for office in offices:
-            filtered_entries = Pilgrim.objects.filter(
-                office=office,
-                #time_stamp__gte=start_date_time,
-                #time_stamp__lte=end_date_time,
-            )
+            if start_date_time and end_date_time:
+                filtered_entries = Pilgrim.objects.filter(
+                    office=office,
+                    time_stamp__gte=start_date_time,
+                    time_stamp__lte=end_date_time,
+                )
+            else:
+                filtered_entries = Pilgrim.objects.filter(office=office)
 
             total_detect_by_camera = filtered_entries.aggregate(total=Sum("camera_count"))["total"] or 0
             total_illegal_pilgrims = filtered_entries.aggregate(total=Sum("illegal_pilgrims"))["total"] or 0
