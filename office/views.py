@@ -2,7 +2,10 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.pagination import PageNumberPagination
+from django.shortcuts import render, get_object_or_404
 from .models import Office
+from .serializers import OfficeSerializer
 from pilgrims.models import Pilgrim
 from django.db.models import Sum
 from django.utils.dateparse import parse_datetime
@@ -33,6 +36,79 @@ def date_time_to_aware(date_time):
     if not is_aware(date_time):
         date_time = make_aware(date_time)
     return date_time
+class CustomPagination(PageNumberPagination):
+    page_size = 10  # Default page size
+    page_size_query_param = 'page_size'  # Allow clients to set their own page size
+    max_page_size = 100  # Limit the maximum page size
+    
+class OfficeApiView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk=None):
+        user = request.user
+        company_ids_qr = request.GET.get('company_ids', '')
+
+        # Parse ID list
+        def parse_id_list(param: str) -> list[int]:
+            return [int(i) for i in param.split(',') if i.strip().isdigit()]
+
+        company_ids = parse_id_list(company_ids_qr)
+
+        if pk:
+            # Single tent/office detail
+            tent = get_object_or_404(Office, pk=pk)
+
+            if tent.company != request.user.company:
+                return Response({
+                    "success": False,
+                    "message": f"Office/Tent with ID {pk} does not belong to your company."
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            if not user.is_admin and tent not in user.assigned_tent.all():
+                return Response({
+                    "success": False,
+                    "message": f"Office/Tent with ID {pk} is not assigned to you."
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            serializer = OfficeSerializer(tent, context={'request': request})
+            return Response({
+                "success": True,
+                "data": serializer.data
+            })
+
+        elif company_ids and user.is_annotator:
+            queryset = Office.objects.filter(company__id__in=company_ids)
+            queryset = sorted(queryset, key=lambda tent: tent_name_list_dict_sorting(tent.name))
+            serializer = OfficeSerializer(queryset, many=True, context={'request': request})
+            return Response({
+                "success": True,
+                "results": serializer.data
+            })
+
+        else:
+            # List all tents/offices based on user role
+            paginate = request.query_params.get('paginate', 'false').lower() == 'true'
+
+            if user.is_admin:
+                queryset = Office.objects.filter(company=request.user.company)
+            else:
+                assigned_tent_ids = user.assigned_tent.values_list('id', flat=True)
+                queryset = Office.objects.filter(id__in=assigned_tent_ids, company=request.user.company)
+
+            queryset = sorted(queryset, key=lambda tent: tent_name_list_dict_sorting(tent.name))
+
+            if paginate:
+                paginator = CustomPagination()
+                paginated_queryset = paginator.paginate_queryset(queryset, request)
+                serializer = OfficeSerializer(paginated_queryset, many=True, context={'request': request})
+                return paginator.get_paginated_response(serializer.data)
+
+            serializer = OfficeSerializer(queryset, many=True, context={'request': request})
+            return Response({
+                "success": True,
+                "results": serializer.data
+            })
+
 
 
 class DashboardIllegalPilgrims(APIView):
