@@ -45,6 +45,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5176",
     "https://rfid.baitguests2.com",
     "https://new.dashboard.baitguests2.com",
+    "https://rfid.aiqualitysolutions.com",
 ]
 
 CSRF_TRUSTED_ORIGINS = [
@@ -59,6 +60,7 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:5176",
     "https://rfid.baitguests2.com",
     "https://new.dashboard.baitguests2.com",
+    "https://rfid.aiqualitysolutions.com",
 ]
 
 CORS_ALLOWED_ORIGIN_REGEXES = [
@@ -73,6 +75,7 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     "http://127.0.0.1:5176",
     "https://rfid.baitguests2.com",
     "https://new.dashboard.baitguests2.com",
+    "https://rfid.aiqualitysolutions.com",
 ]
 
 # Add this to your CORS configuration
