@@ -112,7 +112,7 @@ def get_pilgrims_statistics_for_tent(request, tent_id, date=None):
         total_rfid_count = counter_history.aggregate(Sum('rfid_count'))[
             'rfid_count__sum'] or 0
         
-        total_pilgrims_count = pilgrims_data.aggregate(Sum('illegal_pilgrims'))[
+        total_pilgrims_count = counter_history.aggregate(Sum('illegal_pilgrims'))[
             'illegal_pilgrims__sum'] or 0
 
         # Append the summed values for the cameras on the specific date
