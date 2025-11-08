@@ -167,6 +167,8 @@ class DashboardIllegalPilgrims(APIView):
                 filtered_entries = Pilgrim.objects.filter(office=office)
 
             total_detect_by_camera = filtered_entries.aggregate(total=Sum("camera_count"))["total"] or 0
+            total_detect_by_rfid = filtered_entries.aggregate(total=Sum("rfid_count"))["total"] or 0
+            total_people = max(total_detect_by_camera, total_detect_by_rfid)
             total_illegal_pilgrims = filtered_entries.aggregate(total=Sum("illegal_pilgrims"))["total"] or 0
 
             indicator = "red" if total_illegal_pilgrims > 0 else "green"
@@ -175,7 +177,7 @@ class DashboardIllegalPilgrims(APIView):
                 "tent_id": office.id,
                 "tent_name": office.name,
                 "illegal_pilgrims": total_illegal_pilgrims,
-                "total_people": total_detect_by_camera,
+                "total_people": total_people,
                 "indicator": indicator,
                 "is_sensor_available": True,
             })
