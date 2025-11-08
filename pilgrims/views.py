@@ -9,7 +9,9 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from .serializers import PilgrimSerializer
 from django.utils.dateparse import parse_datetime
 from datetime import datetime
-
+from rest_framework.decorators import api_view, permission_classes
+from django.http import JsonResponse
+from django.db.models import Sum
 import pytz, os
 
 saudi_tz = pytz.timezone('Asia/Riyadh')
@@ -84,6 +86,67 @@ class CameraCounterView(APIView):
             status=status.HTTP_201_CREATED,
         )
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_pilgrims_statistics_for_tent(request, tent_id, date=None):
+    
+    camera_stats = []
+    if date:
+        try:
+            filter_date = datetime.strptime(date, '%Y-%m-%d')
+        except ValueError:
+            return JsonResponse({"error": "Invalid date format. Please use YYYY-MM-DD."}, status=400)
+
+        # Calculate the start and end of the day for filtering
+        start_time = filter_date.replace(
+            hour=0, minute=0, second=0, microsecond=0)
+        end_time = filter_date.replace(
+            hour=23, minute=59, second=59, microsecond=999999)
+        counter_history = Pilgrim.objects.filter(
+            office=tent_id, time_stamp__range=[start_time, end_time])
+
+        # Sum the total_in and total_out for the specific date range
+        total_camera_count = counter_history.aggregate(Sum('camera_count'))[
+            'camera_count__sum'] or 0
+        total_rfid_count = counter_history.aggregate(Sum('rfid_count'))[
+            'rfid_count__sum'] or 0
+
+        # Append the summed values for the cameras on the specific date
+        camera_stats.append({
+            'tent_id': tent_id,
+            'total_camera_count': total_camera_count,
+            'total_rfid_count': total_rfid_count,
+            'date': date
+        })
+    else:
+        # If no date is provided, calculate the sums for all available data
+        pilgrims_data = Pilgrim.objects.filter(office=tent_id)
+        total_camera_count = pilgrims_data.aggregate(Sum('camera_count'))[
+            'camera_count__sum'] or 0
+        total_rfid_count = pilgrims_data.aggregate(Sum('rfid_count'))[
+            'rfid_count__sum'] or 0
+
+        camera = Camera.objects.filter(office_id=tent_id).first()
+        rfid = RFID.objects.filter(office_id=tent_id).first()
+
+        camera_stats.append({
+            'camera_sn': camera.sn if camera else None,
+            'rfid_sn': rfid.sn  if rfid else None,
+            'total_camera_count': total_camera_count,
+            'total_rfid_count': total_rfid_count,
+            #'heartbeat_time': heartbeat_time
+        })
+
+    # Return the result as JSON
+    data = {
+        "success": True,
+        "message": "Camera statistics Fetched Successfully",
+        "camera_statistics": camera_stats
+    }
+    return Response(data, status=status.HTTP_200_OK)
+
+
+
 @method_decorator(csrf_exempt, name='dispatch')
 class RFIDCounterView(APIView):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
@@ -141,6 +204,7 @@ class RFIDCounterView(APIView):
             {"message": "Data processed successfully.", "data": serializer.data},
             status=status.HTTP_201_CREATED,
         )
+
         
         
 class IlligalPilgrimsView(APIView):
