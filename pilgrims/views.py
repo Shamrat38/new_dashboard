@@ -157,8 +157,17 @@ class RFIDCounterView(APIView):
         rfid_count = request.data.get('count')
         time_stamp = request.data.get('time_stamp')
 
-        if not all([sn, rfid_count, time_stamp]):
-            return Response({'error': 'Missing fields'}, status=status.HTTP_400_BAD_REQUEST)
+        # ✅ SN must not be empty or 0
+        if not sn or sn == "0":
+            return Response({'error': 'Invalid or missing RFID SN'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # ✅ Time must exist
+        if time_stamp is None:
+            return Response({'error': 'Missing time_stamp'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # ✅ Count may be 0
+        if rfid_count is None:
+            return Response({'error': 'Missing count'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             rfid_count = int(rfid_count)
@@ -183,20 +192,14 @@ class RFIDCounterView(APIView):
         if not created:
             pilgrim.rfid_count = rfid_count
 
-            # ✅ Check illegal pilgrims
             if pilgrim.camera_count is not None:
-                diff = int(pilgrim.camera_count) - int(pilgrim.rfid_count)
-                if diff > 0:
-                    pilgrim.illegal_pilgrims = diff
-                else:
-                    pilgrim.illegal_pilgrims = 0
-                    # ❌ Remove image if exists (no illegal)
-                    if pilgrim.image and hasattr(pilgrim.image, 'path'):
-                        image_path = pilgrim.image.path
-                        pilgrim.image.delete(save=False)
-                        if os.path.exists(image_path):
-                            os.remove(image_path)
-                        pilgrim.image = None
+                diff = pilgrim.camera_count - pilgrim.rfid_count
+                pilgrim.illegal_pilgrims = diff if diff > 0 else 0
+
+                if pilgrim.illegal_pilgrims == 0 and pilgrim.image:
+                    if hasattr(pilgrim.image, 'path'):
+                        os.remove(pilgrim.image.path)
+                    pilgrim.image = None
 
             pilgrim.save()
 
