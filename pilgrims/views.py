@@ -294,6 +294,7 @@ class PilgrimFramesAPIView(APIView):
             {
                 "id": pilgrim.id,
                 "time": pilgrim.time_stamp,
+                "illegal_pilgrims": pilgrim.illegal_pilgrims,
                 "image": request.build_absolute_uri(pilgrim.image.url) if pilgrim.image else None,
                 "current_status": ["illegal"],      # ✅ frontend expects array
             }
