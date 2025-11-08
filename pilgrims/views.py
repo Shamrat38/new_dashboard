@@ -10,6 +10,7 @@ from .serializers import PilgrimSerializer
 from django.utils.dateparse import parse_datetime
 from datetime import datetime
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.pagination import PageNumberPagination
 from django.http import JsonResponse
 from django.db.models import Sum
 import pytz, os
@@ -260,3 +261,40 @@ class IlligalPilgrimsView(APIView):
 
         serializer = PilgrimSerializer(pilgrims, many=True, context={"request": request})
         return Response(serializer.data, status=200)
+    
+    
+class PilgrimFramesAPIView(APIView):
+    """
+    Returns illegal pilgrim frames based only on tent (office) id.
+    URL: /pilgrims/pilgrim-frames/?tent_ids=1&page=1&page_size=30
+    """
+
+    def get(self, request):
+        tent_ids = request.GET.get("tent_ids", None)
+        page = request.GET.get("page", 1)
+        page_size = request.GET.get("page_size", 30)
+
+        if not tent_ids:
+            return Response({"message": "tent_ids parameter is required"}, status=400)
+
+        queryset = Pilgrim.objects.filter(
+            office__id=tent_ids,
+            illegal_pilgrims__gt=0,  # ✅ Only illegal frames
+            image__isnull=False      # ✅ Must have image
+        ).order_by("-time_stamp")     # newest first
+
+        paginator = PageNumberPagination()
+        paginator.page_size = page_size
+        result_page = paginator.paginate_queryset(queryset, request)
+
+        data = [
+            {
+                "id": pilgrim.id,
+                "time": pilgrim.time_stamp,
+                "image": request.build_absolute_uri(pilgrim.image.url) if pilgrim.image else None,
+                "current_status": ["illegal"],      # ✅ frontend expects array
+            }
+            for pilgrim in result_page
+        ]
+
+        return paginator.get_paginated_response(data)
