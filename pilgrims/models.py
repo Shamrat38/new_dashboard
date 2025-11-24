@@ -69,8 +69,8 @@ class Pilgrim(BaseModel):
     image = models.ImageField(upload_to='counter_image/%Y/%m/%d/', default="", blank=True, null=True)
     illegal_pilgrims = models.IntegerField(default=0)
 
-    def __str__(self):
-        return f"{self.office} - {self.time_stamp}"
+    class Meta:
+        unique_together = ('office', 'time_stamp')
     
 
 
