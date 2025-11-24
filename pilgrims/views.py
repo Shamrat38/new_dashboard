@@ -22,7 +22,7 @@ def start_end_time_to_riyad(dt):
         return saudi_tz.localize(dt)
     return dt.astimezone(saudi_tz)
 
-
+#️⃣ View to handle camera counter data
 @method_decorator(csrf_exempt, name='dispatch')
 class CameraCounterView(APIView):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
