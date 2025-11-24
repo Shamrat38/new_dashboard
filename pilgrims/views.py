@@ -73,6 +73,7 @@ class CameraCounterView(APIView):
             return Response({'error': 'Invalid Camera SN'}, status=status.HTTP_404_NOT_FOUND)
 
         time_obj = datetime.fromisoformat(time_stamp)
+        time_obj = time_obj.replace(microsecond=0)
 
         # SAFE get_or_create
         pilgrim, created = safe_get_or_create_pilgrim(
@@ -207,6 +208,7 @@ class RFIDCounterView(APIView):
             return Response({'error': 'Invalid RFID SN'}, status=status.HTTP_404_NOT_FOUND)
 
         time_obj = datetime.fromisoformat(time_stamp)
+        time_obj = time_obj.replace(microsecond=0)
 
         # SAFE get_or_create
         pilgrim, created = safe_get_or_create_pilgrim(
