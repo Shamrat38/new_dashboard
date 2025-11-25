@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import Camera, RFID, CameraCounter, RFIDCounter
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from .serializers import PilgrimSerializer
+#from .serializers import PilgrimSerializer
 from django.utils.dateparse import parse_datetime
 from datetime import datetime
 from rest_framework.decorators import api_view, permission_classes
