@@ -37,7 +37,7 @@ class CameraCounterView(APIView):
         time_stamp = request.data.get("time_stamp")
         image = request.data.get("image")
 
-        if not all([sn, camera_count, time_stamp]):
+        if sn in [None, ""] or time_stamp in [None, ""] or camera_count is None:
             return Response({"error": "Missing fields"}, status=400)
 
         try:
@@ -68,7 +68,7 @@ class RFIDCounterView(APIView):
         rfid_count = request.data.get("rfid_count")
         time_stamp = request.data.get("time_stamp")
 
-        if not all([sn, rfid_count, time_stamp]):
+        if sn in [None, ""] or time_stamp in [None, ""] or rfid_count is None:
             return Response({"error": "Missing fields"}, status=400)
 
         try:
