@@ -64,7 +64,7 @@ class RFIDCounterView(APIView):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def post(self, request):
-        sn = request.data.get("camera_sn")
+        sn = request.data.get("rfid_sn")
         rfid_count = request.data.get("rfid_count")
         time_stamp = request.data.get("time_stamp")
 
