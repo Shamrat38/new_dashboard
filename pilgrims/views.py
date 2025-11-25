@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Camera, RFID, Pilgrim
+from .models import Camera, RFID, CameraCounter, RFIDCounter
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from .serializers import PilgrimSerializer
 from django.utils.dateparse import parse_datetime
@@ -13,7 +13,6 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.pagination import PageNumberPagination
 from django.http import JsonResponse
 from django.db.models import Sum
-from django.db import transaction, IntegrityError
 import pytz, os
 
 saudi_tz = pytz.timezone('Asia/Riyadh')
@@ -28,107 +27,69 @@ def normalize_time(ts):
     return obj.replace(microsecond=0)
 
 
-def safe_get_or_create(office, time_obj, defaults):
-    try:
-        with transaction.atomic():
-            pilgrim, created = Pilgrim.objects.get_or_create(
-                office=office,
-                time_stamp=time_obj,
-                defaults=defaults
-            )
-            return pilgrim, created
-    except IntegrityError:
-        # Another request created it at the same millisecond
-        pilgrim = Pilgrim.objects.get(office=office, time_stamp=time_obj)
-        return pilgrim, False
-
-
 @method_decorator(csrf_exempt, name='dispatch')
 class CameraCounterView(APIView):
-
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def post(self, request):
-
-        # COMMON FIELDS
-        time_stamp = request.data.get("time_stamp")
-        if not time_stamp:
-            return Response({"error": "Missing time_stamp"}, status=400)
-
-        time_obj = normalize_time(time_stamp)
-
-        camera_sn = request.data.get("camera_sn")
+        sn = request.data.get("sn")
         camera_count = request.data.get("camera_count")
-        rfid_sn = request.data.get("sn") or request.data.get("rfid_sn")
-        rfid_count = request.data.get("rfid_count") or request.data.get("count")
+        time_stamp = request.data.get("time_stamp")
         image = request.data.get("image")
 
-        office = None
+        if not all([sn, camera_count, time_stamp]):
+            return Response({"error": "Missing fields"}, status=400)
 
-        # --- CAMERA PART ---
-        if camera_sn:
-            try:
-                camera = Camera.objects.get(sn=camera_sn)
-                office = camera.office
-            except Camera.DoesNotExist:
-                return Response({"error": "Invalid Camera SN"}, status=404)
+        try:
+            camera = Camera.objects.get(sn=sn)
+            office = camera.office
+        except Camera.DoesNotExist:
+            return Response({"error": "Invalid Camera SN"}, status=404)
 
-        # --- RFID PART ---
-        if rfid_sn:
-            if rfid_sn == "0" or rfid_sn == "":
-                return Response({"error": "Invalid RFID SN"}, status=400)
-
-            try:
-                rfid = RFID.objects.get(sn=rfid_sn)
-                office = rfid.office
-            except RFID.DoesNotExist:
-                return Response({"error": "Invalid RFID SN"}, status=404)
-
-        if office is None:
-            return Response({"error": "No valid SN provided"}, status=400)
-
-        # DEFAULTS on create
-        defaults = {}
-        if camera_count is not None:
-            defaults["camera_count"] = int(camera_count)
-        if rfid_count is not None:
-            defaults["rfid_count"] = int(rfid_count)
-        if image:
-            defaults["image"] = image
-
-        # --- SAFE UPSERT ---
-        pilgrim, created = safe_get_or_create(office, time_obj, defaults)
-
-        # --- UPDATE EXISTING ---
-        if not created:
-
-            if camera_count is not None:
-                pilgrim.camera_count = int(camera_count)
-
-            if rfid_count is not None:
-                pilgrim.rfid_count = int(rfid_count)
-
-            if image:
-                pilgrim.image = image
-
-        # --- ILLEGAL PILGRIMS ---
-        if pilgrim.camera_count is not None and pilgrim.rfid_count is not None:
-            diff = pilgrim.camera_count - pilgrim.rfid_count
-            pilgrim.illegal_pilgrims = diff if diff > 0 else 0
-
-            if pilgrim.illegal_pilgrims == 0 and pilgrim.image:
-                if hasattr(pilgrim.image, "path") and os.path.exists(pilgrim.image.path):
-                    os.remove(pilgrim.image.path)
-                pilgrim.image = None
-
-        pilgrim.save()
+        obj = CameraCounter.objects.create(
+            office=office,
+            sn=sn,
+            camera_count=int(camera_count),
+            time_stamp=datetime.fromisoformat(time_stamp),
+            image=image,
+        )
 
         return Response({
-            "message": "Data processed successfully.",
-            "data": PilgrimSerializer(pilgrim, context={"request": request}).data
+            "message": "Camera data stored",
+            "id": obj.id
+        }, status=201)
+        
+@method_decorator(csrf_exempt, name='dispatch')
+class RFIDCounterView(APIView):
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    def post(self, request):
+        sn = request.data.get("sn")
+        rfid_count = request.data.get("rfid_count")
+        time_stamp = request.data.get("time_stamp")
+
+        if not all([sn, rfid_count, time_stamp]):
+            return Response({"error": "Missing fields"}, status=400)
+
+        try:
+            rfid = RFID.objects.get(sn=sn)
+            office = rfid.office
+        except RFID.DoesNotExist:
+            return Response({"error": "Invalid RFID SN"}, status=404)
+
+        obj = RFIDCounter.objects.create(
+            office=office,
+            sn=sn,
+            rfid_count=int(rfid_count),
+            time_stamp=datetime.fromisoformat(time_stamp),
+        )
+
+        return Response({
+            "message": "RFID data stored",
+            "id": obj.id
         }, status=201)
 
-@api_view(["GET"])
+"""@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_pilgrims_statistics_for_tent(request, tent_id, date=None):
     
@@ -196,79 +157,15 @@ def get_pilgrims_statistics_for_tent(request, tent_id, date=None):
     return Response(data, status=status.HTTP_200_OK)
 
 
-"""
-@method_decorator(csrf_exempt, name='dispatch')
-class RFIDCounterView(APIView):
-    parser_classes = (MultiPartParser, FormParser, JSONParser)
-
-    def post(self, request):
-        sn = request.data.get('sn')
-        rfid_count = request.data.get('count')
-        time_stamp = request.data.get('time_stamp')
-
-        # SN required
-        if not sn or sn == "0":
-            return Response({'error': 'Invalid or missing RFID SN'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if time_stamp is None:
-            return Response({'error': 'Missing time_stamp'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if rfid_count is None:
-            return Response({'error': 'Missing count'}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            rfid_count = int(rfid_count)
-        except ValueError:
-            return Response({'error': 'Invalid rfid_count value'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # RFID device
-        try:
-            rfid = RFID.objects.get(sn=sn)
-            office = rfid.office
-        except RFID.DoesNotExist:
-            return Response({'error': 'Invalid RFID SN'}, status=status.HTTP_404_NOT_FOUND)
-
-        time_obj = datetime.fromisoformat(time_stamp)
-        time_obj = time_obj.replace(microsecond=0)
-
-        # SAFE get_or_create
-        pilgrim, created = safe_get_or_create_pilgrim(
-            office=office,
-            time_obj=time_obj,
-            defaults={'rfid_count': rfid_count}
-        )
-
-        # If exists → update
-        if not created:
-            pilgrim.rfid_count = rfid_count
-
-            # Check illegal pilgrims
-            if pilgrim.camera_count is not None:
-                diff = pilgrim.camera_count - pilgrim.rfid_count
-                pilgrim.illegal_pilgrims = diff if diff > 0 else 0
-
-                if pilgrim.illegal_pilgrims == 0 and pilgrim.image:
-                    if hasattr(pilgrim.image, 'path') and os.path.exists(pilgrim.image.path):
-                        os.remove(pilgrim.image.path)
-                    pilgrim.image = None
-
-            pilgrim.save()
-
-        serializer = PilgrimSerializer(pilgrim, context={"request": request})
-        return Response({"message": "RFID data processed.", "data": serializer.data},
-                        status=status.HTTP_201_CREATED)
-"""
         
         
 class IlligalPilgrimsView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, *args, **kwargs):
-        """
-        GET:
-        - /pilgrims/illegal-pilgrims/?office=1,2,3&start_date=2025-10-20T00:00:00&end_date=2025-10-22T23:59:59
-        - /pilgrims/illegal-pilgrims/<id>/
-        """
+        #GET:
+        #- /pilgrims/illegal-pilgrims/?office=1,2,3&start_date=2025-10-20T00:00:00&end_date=2025-10-22T23:59:59
+        #- /pilgrims/illegal-pilgrims/<id>/
         office_param = request.GET.get("office")
         start_date = request.GET.get("start_date")
         end_date = request.GET.get("end_date")
@@ -316,10 +213,10 @@ class IlligalPilgrimsView(APIView):
     
     
 class PilgrimFramesAPIView(APIView):
-    """
-    Returns illegal pilgrim frames based only on tent (office) id.
-    URL: /pilgrims/pilgrim-frames/?tent_ids=1&page=1&page_size=30
-    """
+    
+    #Returns illegal pilgrim frames based only on tent (office) id.
+    #URL: /pilgrims/pilgrim-frames/?tent_ids=1&page=1&page_size=30
+    
 
     def get(self, request):
         tent_ids = request.GET.get("tent_ids", None)
@@ -351,3 +248,4 @@ class PilgrimFramesAPIView(APIView):
         ]
 
         return paginator.get_paginated_response(data)
+"""

@@ -61,7 +61,7 @@ class Camera(BaseModel):
         super().save(*args, **kwargs)
 
 
-class Pilgrim(BaseModel):
+"""class Pilgrim(BaseModel):
     office = models.ForeignKey(Office, on_delete=models.CASCADE)
     camera_count = models.IntegerField(null=True, blank=True)
     rfid_count = models.IntegerField(null=True, blank=True)
@@ -72,23 +72,24 @@ class Pilgrim(BaseModel):
     class Meta:
         unique_together = ('office', 'time_stamp')
     
+"""
 
-
-"""class CameraCounter(BaseModel):
-    camera = models.ForeignKey(Camera, on_delete=models.CASCADE)
+class CameraCounter(BaseModel):
+    office = models.ForeignKey(Office, on_delete=models.CASCADE)
     sn = models.CharField(max_length=255)
-    count = models.IntegerField(default=0)
-    time_stamp = models.DateTimeField(null=True, blank=True)
-    image = models.ImageField(upload_to='counter_image/%Y/%m/%d/', default="", blank=True, null=True)
+    camera_count = models.IntegerField()
+    time_stamp = models.DateTimeField()
+    image = models.ImageField(upload_to='counter_image/%Y/%m/%d/', null=True, blank=True)
 
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        
+    def __str__(self):
+        return f"Camera: {self.sn} - {self.time_stamp}"
+
+
 class RFIDCounter(BaseModel):
-    rfid = models.ForeignKey(RFID, on_delete=models.CASCADE)
+    office = models.ForeignKey(Office, on_delete=models.CASCADE)
     sn = models.CharField(max_length=255)
-    count = models.IntegerField(default=0)
-    time_stamp = models.DateTimeField(null=True, blank=True)
+    rfid_count = models.IntegerField()
+    time_stamp = models.DateTimeField()
 
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)"""
+    def __str__(self):
+        return f"RFID: {self.sn} - {self.time_stamp}"
