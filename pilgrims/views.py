@@ -32,7 +32,7 @@ class CameraCounterView(APIView):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def post(self, request):
-        sn = request.data.get("sn")
+        sn = request.data.get("camera_sn")
         camera_count = request.data.get("camera_count")
         time_stamp = request.data.get("time_stamp")
         image = request.data.get("image")
@@ -64,7 +64,7 @@ class RFIDCounterView(APIView):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def post(self, request):
-        sn = request.data.get("sn")
+        sn = request.data.get("camera_sn")
         rfid_count = request.data.get("rfid_count")
         time_stamp = request.data.get("time_stamp")
 
