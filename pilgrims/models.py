@@ -61,7 +61,7 @@ class Camera(BaseModel):
         super().save(*args, **kwargs)
 
 
-"""class Pilgrim(BaseModel):
+class Pilgrim(BaseModel):
     office = models.ForeignKey(Office, on_delete=models.CASCADE)
     camera_count = models.IntegerField(null=True, blank=True)
     rfid_count = models.IntegerField(null=True, blank=True)
@@ -72,7 +72,7 @@ class Camera(BaseModel):
     class Meta:
         unique_together = ('office', 'time_stamp')
     
-"""
+
 
 class CameraCounter(BaseModel):
     office = models.ForeignKey(Office, on_delete=models.CASCADE)
