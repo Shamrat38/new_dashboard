@@ -280,3 +280,19 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
+
+
+# CELERY CONFIG
+CELERY_BROKER_URL = "redis://localhost:6379/0"
+CELERY_RESULT_BACKEND = "redis://localhost:6379/1"
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'Asia/Riyadh'
+
+CELERY_BEAT_SCHEDULE = {
+    "merge-pilgrims-every-second": {
+        "task": "pilgrims.tasks.merge_pilgrims_every_second",
+        "schedule": 1.0,
+    }
+}
