@@ -6,7 +6,7 @@ from rest_framework.pagination import PageNumberPagination
 from django.shortcuts import render, get_object_or_404
 from .models import Office
 from .serializers import OfficeSerializer
-#from pilgrims.models import Pilgrim
+from pilgrims.models import Pilgrim
 from django.db.models import Sum
 from django.utils.dateparse import parse_datetime
 from django.utils.timezone import make_aware, is_naive, is_aware
@@ -117,7 +117,7 @@ class OfficeApiView(APIView):
             })
 
 
-"""
+
 class DashboardIllegalPilgrims(APIView):
     permission_classes = []  # <-- keep or replace based on your security
 
@@ -191,4 +191,4 @@ class DashboardIllegalPilgrims(APIView):
                 "results": results,
             },
             status=status.HTTP_200_OK,
-        )"""
+        )
