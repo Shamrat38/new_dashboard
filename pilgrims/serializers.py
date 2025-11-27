@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.conf import settings
-"""from .models import Pilgrim
+from .models import Pilgrim
 
 
 class PilgrimSerializer(serializers.ModelSerializer):
@@ -26,4 +26,3 @@ class PilgrimSerializer(serializers.ModelSerializer):
         if settings.DEBUG:
             return f"{settings.BASE_URL}{obj.image.url}"
         return obj.image.url 
-"""

@@ -4,9 +4,9 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Camera, RFID, CameraCounter, RFIDCounter
+from .models import Camera, RFID, CameraCounter, RFIDCounter, Pilgrim
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-#from .serializers import PilgrimSerializer
+from .serializers import PilgrimSerializer
 from django.utils.dateparse import parse_datetime
 from datetime import datetime
 from rest_framework.decorators import api_view, permission_classes
@@ -89,7 +89,7 @@ class RFIDCounterView(APIView):
             "id": obj.id
         }, status=201)
 
-"""@api_view(["GET"])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_pilgrims_statistics_for_tent(request, tent_id, date=None):
     
@@ -248,4 +248,3 @@ class PilgrimFramesAPIView(APIView):
         ]
 
         return paginator.get_paginated_response(data)
-"""
