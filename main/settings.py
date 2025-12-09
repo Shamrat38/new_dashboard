@@ -292,7 +292,7 @@ CELERY_TIMEZONE = 'Asia/Riyadh'
 
 CELERY_BEAT_SCHEDULE = {
     "merge-pilgrims-every-second": {
-        "task": "pilgrims.tasks.merge_pilgrims_every_second",
+        "task": "pilgrims.tasks.process_pilgrims_data",
         "schedule": 1.0,
     }
 }
