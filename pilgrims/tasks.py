@@ -2,8 +2,6 @@ from celery import shared_task
 from datetime import timedelta
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import F
-from django.db.models.functions import TruncSecond
 import pytz
 import os
 
@@ -12,110 +10,144 @@ from .models import CameraCounter, RFIDCounter, Pilgrim
 saudi_tz = pytz.timezone("Asia/Riyadh")
 
 
-# -------------------------------
-# NORMALIZED MERGE HELPER
-# -------------------------------
+# ------------------------------------------------------
+# FIRST STAGE — ALWAYS CREATE ROW
+# ------------------------------------------------------
 def _merge_for_timestamp(target_ts):
     """
-    Merge data for EXACT second (no microseconds).
-    Uses TruncSecond to match DB rows correctly.
+    ALWAYS creates a Pilgrim row for the timestamp.
+    No updates, no get_or_create — only create().
     """
 
     target_ts = target_ts.replace(microsecond=0)
 
-    # Normalize DB timestamps using TruncSecond
-    camera_qs = (
-        CameraCounter.objects
-        .annotate(ts_trim=TruncSecond("time_stamp"))
-        .filter(ts_trim=target_ts)
+    camera = (
+        CameraCounter.objects.filter(time_stamp=target_ts)
         .order_by("-id")
+        .first()
+    )
+    rfid = (
+        RFIDCounter.objects.filter(time_stamp=target_ts)
+        .order_by("-id")
+        .first()
     )
 
-    rfid_qs = (
-        RFIDCounter.objects
-        .annotate(ts_trim=TruncSecond("time_stamp"))
-        .filter(ts_trim=target_ts)
-        .order_by("-id")
-    )
-
-    # If nothing exists for this second → ignore
-    if not camera_qs.exists() and not rfid_qs.exists():
+    # If no camera & no RFID — cannot determine office → skip
+    if not camera and not rfid:
         return
 
-    # Collect all offices involved for this second
-    office_ids = set(camera_qs.values_list("office_id", flat=True)).union(
-        set(rfid_qs.values_list("office_id", flat=True))
+    # Determine office_id
+    office_id = camera.office_id if camera else rfid.office_id
+
+    camera_count = camera.camera_count if camera else None
+    rfid_count = rfid.rfid_count if rfid else None
+    image = camera.image if (camera and camera.image) else None
+
+    # Compute illegal pilgrims
+    if camera_count is not None and rfid_count is not None:
+        illegal = max(camera_count - rfid_count, 0)
+    else:
+        illegal = 0
+
+    # Always create a new row (never update here)
+    Pilgrim.objects.create(
+        office_id=office_id,
+        time_stamp=target_ts,
+        camera_count=camera_count,
+        rfid_count=rfid_count,
+        illegal_pilgrims=illegal,
+        image=image if illegal > 0 else None,
     )
 
-    for office_id in office_ids:
-        cam = camera_qs.filter(office_id=office_id).first()
-        rfd = rfid_qs.filter(office_id=office_id).first()
 
-        camera_count = cam.camera_count if cam else None
-        rfid_count = rfd.rfid_count if rfd else None
-        image = cam.image if cam and cam.image else None
+# ------------------------------------------------------
+# SECOND STAGE — UPDATE ONLY, NEVER CREATE
+# ------------------------------------------------------
+def _check_for_timestamp(target_ts):
+    """
+    Only update existing Pilgrim row.
+    Never create a new row here — if missing, just ignore.
+    """
 
-        # Calculate illegal pilgrims
-        illegal = 0
-        if camera_count is not None and rfid_count is not None:
-            diff = camera_count - rfid_count
-            illegal = diff if diff > 0 else 0
+    target_ts = target_ts.replace(microsecond=0)
 
-        # UPSERT INTO PILGRIM TABLE
-        with transaction.atomic():
-            pilgrim, created = Pilgrim.objects.get_or_create(
-                office_id=office_id,
-                time_stamp=target_ts,  # IMPORTANT → ALWAYS normalized timestamp
-                defaults={
-                    "camera_count": camera_count,
-                    "rfid_count": rfid_count,
-                    "illegal_pilgrims": illegal,
-                    "image": image,
-                }
-            )
+    # Fetch existing row
+    pilgrim = Pilgrim.objects.filter(time_stamp=target_ts).first()
+    if not pilgrim:
+        return  # Do NOT create anything here — merge only happens in first stage
 
-            if not created:
-                # Update missing fields
-                if camera_count is not None:
-                    pilgrim.camera_count = camera_count
+    # Fetch latest camera & RFID rows
+    camera = (
+        CameraCounter.objects.filter(time_stamp=target_ts)
+        .order_by("-id")
+        .first()
+    )
+    rfid = (
+        RFIDCounter.objects.filter(time_stamp=target_ts)
+        .order_by("-id")
+        .first()
+    )
 
-                if rfid_count is not None:
-                    pilgrim.rfid_count = rfid_count
+    updated = False
 
-                # Recalculate illegal
-                if pilgrim.camera_count is not None and pilgrim.rfid_count is not None:
-                    diff = pilgrim.camera_count - pilgrim.rfid_count
-                    pilgrim.illegal_pilgrims = diff if diff > 0 else 0
+    # ------------------------
+    # FILL missing values only
+    # ------------------------
+    if pilgrim.camera_count is None and camera:
+        pilgrim.camera_count = camera.camera_count
+        updated = True
 
-                # Image logic
-                if pilgrim.illegal_pilgrims > 0:
-                    if image:
-                        pilgrim.image = image
-                else:
-                    # No illegal → remove image
-                    if pilgrim.image:
-                        try:
-                            if hasattr(pilgrim.image, "path") and os.path.exists(pilgrim.image.path):
-                                os.remove(pilgrim.image.path)
-                        except:
-                            pass
-                        pilgrim.image = None
+    if pilgrim.rfid_count is None and rfid:
+        pilgrim.rfid_count = rfid.rfid_count
+        updated = True
 
-                pilgrim.save()
+    # Recalc illegal
+    if pilgrim.camera_count is not None and pilgrim.rfid_count is not None:
+        pilgrim.illegal_pilgrims = max(
+            pilgrim.camera_count - pilgrim.rfid_count, 0
+        )
+    else:
+        pilgrim.illegal_pilgrims = 0
+
+    # Update image logic
+    if pilgrim.illegal_pilgrims > 0:
+        if camera and camera.image:
+            pilgrim.image = camera.image
+    else:
+        # remove image when illegal = 0
+        if pilgrim.image:
+            try:
+                if hasattr(pilgrim.image, "path") and os.path.exists(pilgrim.image.path):
+                    os.remove(pilgrim.image.path)
+            except:
+                pass
+            pilgrim.image = None
+
+    if updated:
+        pilgrim.save()
 
 
-# -------------------------------
-# CELERY TASK RUNNING EVERY SECOND
-# -------------------------------
+# ------------------------------------------------------
+# MAIN CELERY BEAT TASK — RUNS EVERY SECOND
+# ------------------------------------------------------
 @shared_task
 def merge_pilgrims_every_second():
+    """
+    Runs every second:
+    1. Create row for NOW - 5 seconds
+    2. Update row for NOW - 5 minutes
+    3. Update row for NOW - 10 minutes
+    """
+
     now_saudi = timezone.now().astimezone(saudi_tz).replace(microsecond=0)
 
-    timestamps = [
-        now_saudi - timedelta(seconds=5),     # Stage 1
-        now_saudi - timedelta(minutes=5),     # Stage 2
-        now_saudi - timedelta(minutes=10),    # Stage 3
-    ]
+    ts_5s = now_saudi - timedelta(seconds=5)
+    ts_5m = now_saudi - timedelta(minutes=5)
+    ts_10m = now_saudi - timedelta(minutes=10)
 
-    for ts in timestamps:
-        _merge_for_timestamp(ts)
+    # First stage: ALWAYS create row
+    _merge_for_timestamp(ts_5s)
+
+    # Second stage: ONLY update row
+    _check_for_timestamp(ts_5m)
+    _check_for_timestamp(ts_10m)
