@@ -7,11 +7,24 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.generics import GenericAPIView
 from rest_framework.pagination import PageNumberPagination
+import pytz
+from django.utils import timezone
 
 from authentication.models import MyUser, Company
 from authentication.serializers import UserRegistrationSerializer, UserLoginSerializer, MyUserSerializer
 from authentication.utils import standard_response, get_token_for_user
 
+
+saudi_tz = pytz.timezone('Asia/Riyadh')
+
+
+def Current_saudi_time():
+    now_saudi = timezone.now().astimezone(saudi_tz)
+    start_time = saudi_tz.localize(
+        datetime.combine(now_saudi.date(), time.min))
+    end_time = now_saudi
+
+    return start_time, end_time
 class CustomPagination(PageNumberPagination):
     page_size = 10  # Default page size
     page_size_query_param = 'page_size'  # Allow clients to set their own page size
@@ -124,3 +137,11 @@ class UserView(APIView):
                 "success": False,
                 "message": f"User with ID {pk} not found."
             }, status=404)
+            
+            
+class ServerTime(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        start_time, end_time = Current_saudi_time()
+        return Response({"server_time": end_time.isoformat()})
