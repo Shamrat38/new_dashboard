@@ -127,5 +127,4 @@ class UserLoginSerializer(serializers.ModelSerializer):
 class MyUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = MyUser
-        fields = ("id", "email", "username", "date_joined", "last_login",
-                  "is_admin", "is_active", "is_staff", "is_superuser", "assigned_tent")
+        fields = ("id", "email", "username", "date_joined", "last_login", "is_admin", "is_active", "is_staff", "is_superuser", "assigned_tent")
