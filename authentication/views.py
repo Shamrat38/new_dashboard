@@ -6,9 +6,16 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.generics import GenericAPIView
+from rest_framework.pagination import PageNumberPagination
 
-from authentication.serializers import UserRegistrationSerializer, UserLoginSerializer
+from authentication.models import MyUser, Company
+from authentication.serializers import UserRegistrationSerializer, UserLoginSerializer, MyUserSerializer
 from authentication.utils import standard_response, get_token_for_user
+
+class CustomPagination(PageNumberPagination):
+    page_size = 10  # Default page size
+    page_size_query_param = 'page_size'  # Allow clients to set their own page size
+    max_page_size = 100  # Limit the maximum page size
 
 @method_decorator(csrf_exempt, name='dispatch')
 class UserRegistrationView(APIView):
@@ -41,3 +48,79 @@ class UserLoginView(GenericAPIView):
                 'email': user.email,
             },
         }))
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class UserView(APIView):
+    permission_classes = [IsAuthenticated]
+    pagination_class = CustomPagination
+    serializer_class = MyUserSerializer
+
+    def get(self, request, *args, **kwargs):
+        queryset = MyUser.objects.filter(
+            company=request.user.company
+        ).order_by('id')
+
+        paginate = request.query_params.get(
+            'paginate', 'true').lower() == 'true'
+
+        if paginate:
+            paginator = self.pagination_class()
+            paginated_queryset = paginator.paginate_queryset(
+                queryset, request, view=self)
+            serializer = self.serializer_class(paginated_queryset, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        serializer = self.serializer_class(queryset, many=True)
+        return Response({
+            "success": True,
+            "message": "User list retrieved successfully without pagination.",
+            "data": serializer.data
+        })
+
+    def delete(self, request, pk, *args, **kwargs):
+        try:
+            user = MyUser.objects.get(id=pk)
+            if user.company != request.user.company:
+                return Response({
+                    "success": False,
+                    "message": f"User with ID {pk} does not belong to your company."
+                }, status=403)
+
+            user.delete()
+            return Response({
+                "success": True,
+                "message": f"User with ID {pk} deleted successfully."
+            }, status=200)
+
+        except MyUser.DoesNotExist:
+            return Response({
+                "success": False,
+                "message": f"User with ID {pk} not found."
+            }, status=404)
+
+    def patch(self, request, pk, *args, **kwargs):
+        try:
+            user = MyUser.objects.get(id=pk)
+            if user.company != request.user.company:
+                return Response({
+                    "success": False,
+                    "message": f"User with ID {pk} does not belong to your company."
+                }, status=403)
+
+            serializer = UserRegistrationSerializer(
+                user, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(company=request.user.company)
+
+            return Response({
+                "success": True,
+                "message": f"User with ID {pk} updated successfully.",
+                "results": serializer.data
+            }, status=200)
+
+        except MyUser.DoesNotExist:
+            return Response({
+                "success": False,
+                "message": f"User with ID {pk} not found."
+            }, status=404)
