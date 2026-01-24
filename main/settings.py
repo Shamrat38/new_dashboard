@@ -155,6 +155,7 @@ INSTALLED_APPS = [
     'authentication',
     'pilgrims',
     'office',
+    'rfid_registry',
 ]
 
 AUTH_USER_MODEL = "authentication.MyUser"
