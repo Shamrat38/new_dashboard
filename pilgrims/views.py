@@ -11,7 +11,7 @@ from .serializers import PilgrimSerializer
 from django.utils.dateparse import parse_datetime
 from django.utils import timezone
 from datetime import datetime, timedelta
-from django.db.models import OuterRef, Subquery, BooleanField, Case, When, Value
+from django.db.models import OuterRef, Exists, Subquery, BooleanField, Case, When, Value
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.pagination import PageNumberPagination
 from django.http import JsonResponse
@@ -281,14 +281,7 @@ class LiveTagStatusAPIView(APIView):
         )
 
         tags = RFIDTag.objects.annotate(
-            is_live=Case(
-                When(
-                    Subquery(live_subquery.values('id')[:1]).exists(),
-                    then=Value(True)
-                ),
-                default=Value(False),
-                output_field=BooleanField()
-            )
+            is_live=Exists(live_subquery)
         ).values('epc_code', 'name', 'category', 'is_live')
 
         result = {}
