@@ -4,10 +4,11 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Camera, RFID, CameraCounter, RFIDCounter, Pilgrim
+from .models import Camera, RFID, CameraCounter, RFIDCounter, Pilgrim, LiveRFIDTag
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from .serializers import PilgrimSerializer
 from django.utils.dateparse import parse_datetime
+from django.utils import timezone
 from datetime import datetime
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.pagination import PageNumberPagination
@@ -59,35 +60,48 @@ class CameraCounterView(APIView):
             "id": obj.id
         }, status=201)
         
-@method_decorator(csrf_exempt, name='dispatch')
-class RFIDCounterView(APIView):
-    parser_classes = (MultiPartParser, FormParser, JSONParser)
+def post(self, request):
+    sn = request.data.get("rfid_sn")
+    rfid_count = request.data.get("rfid_count")
+    time_stamp = request.data.get("time_stamp")
+    epcs = request.data.get("epcs", [])
 
-    def post(self, request):
-        sn = request.data.get("rfid_sn")
-        rfid_count = request.data.get("rfid_count")
-        time_stamp = request.data.get("time_stamp")
+    if sn in [None, ""] or time_stamp in [None, ""] or rfid_count is None:
+        return Response({"error": "Missing fields"}, status=400)
 
-        if sn in [None, ""] or time_stamp in [None, ""] or rfid_count is None:
-            return Response({"error": "Missing fields"}, status=400)
+    try:
+        rfid = RFID.objects.get(sn=sn)
+        office = rfid.office
+    except RFID.DoesNotExist:
+        return Response({"error": "Invalid RFID SN"}, status=404)
 
-        try:
-            rfid = RFID.objects.get(sn=sn)
-            office = rfid.office
-        except RFID.DoesNotExist:
-            return Response({"error": "Invalid RFID SN"}, status=404)
+    ts = datetime.fromisoformat(time_stamp)
 
-        obj = RFIDCounter.objects.create(
-            office=office,
-            sn=sn,
-            rfid_count=int(rfid_count),
-            time_stamp=datetime.fromisoformat(time_stamp),
+    # ✅ Store history
+    obj = RFIDCounter.objects.create(
+        office=office,
+        sn=sn,
+        rfid_count=int(rfid_count),
+        time_stamp=ts,
+    )
+
+    # ✅ UPDATE LIVE TABLE HERE (THIS IS WHAT YOU WANT)
+    now = timezone.now()
+
+    for epc in epcs:
+        LiveRFIDTag.objects.update_or_create(
+            epc_code=epc,
+            defaults={
+                "office": office,
+                "last_seen": now
+            }
         )
 
-        return Response({
-            "message": "RFID data stored",
-            "id": obj.id
-        }, status=201)
+    return Response({
+        "message": "RFID data stored",
+        "id": obj.id
+    }, status=201)
+
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
