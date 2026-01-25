@@ -68,7 +68,7 @@ class RFIDCounterView(APIView):
         sn = request.data.get("rfid_sn")
         rfid_count = request.data.get("rfid_count")
         time_stamp = request.data.get("time_stamp")
-        epcs = request.data.get("epcs", [])
+        epcs = request.data.get("tags", [])
 
         if sn in [None, ""] or time_stamp in [None, ""] or rfid_count is None:
             return Response({"error": "Missing fields"}, status=400)
@@ -87,6 +87,7 @@ class RFIDCounterView(APIView):
             sn=sn,
             rfid_count=int(rfid_count),
             time_stamp=ts,
+            tags =epcs,
         )
 
         # ✅ UPDATE LIVE TABLE HERE (THIS IS WHAT YOU WANT)
