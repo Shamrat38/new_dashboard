@@ -5,11 +5,13 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Camera, RFID, CameraCounter, RFIDCounter, Pilgrim, LiveRFIDTag
+from rfid_registry.models import RFIDTag
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from .serializers import PilgrimSerializer
 from django.utils.dateparse import parse_datetime
 from django.utils import timezone
-from datetime import datetime
+from datetime import datetime, timedelta
+from django.db.models import OuterRef, Subquery, BooleanField, Case, When, Value
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.pagination import PageNumberPagination
 from django.http import JsonResponse
@@ -264,3 +266,37 @@ class PilgrimFramesAPIView(APIView):
         ]
 
         return paginator.get_paginated_response(data)
+
+
+class LiveTagStatusAPIView(APIView):
+
+    def get(self, request):
+        threshold = timezone.now() - timedelta(seconds=3)
+
+        live_subquery = LiveRFIDTag.objects.filter(
+            epc_code=OuterRef('epc_code'),
+            last_seen__gte=threshold
+        )
+
+        tags = RFIDTag.objects.annotate(
+            is_live=Case(
+                When(
+                    Subquery(live_subquery.values('id')[:1]).exists(),
+                    then=Value(True)
+                ),
+                default=Value(False),
+                output_field=BooleanField()
+            )
+        ).values('epc_code', 'name', 'category', 'is_live')
+
+        result = {}
+
+        for tag in tags:
+            cat = tag['category'] or "Uncategorized"
+            result.setdefault(cat, []).append({
+                "epc": tag['epc_code'],
+                "name": tag['name'],
+                "live": tag['is_live']
+            })
+
+        return Response(result)
