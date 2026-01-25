@@ -2,6 +2,7 @@ from django.db import models
 from django.core.exceptions import ValidationError
 from authentication.models import BaseModel, MyUser
 from office.models import Office
+from django.contrib.postgres.fields import ArrayField
 
 
 class RFID(BaseModel):
@@ -90,6 +91,23 @@ class RFIDCounter(BaseModel):
     sn = models.CharField(max_length=255)
     rfid_count = models.IntegerField()
     time_stamp = models.DateTimeField()
+    tags = ArrayField(
+        models.CharField(max_length=255),
+        default=list,
+        blank=True
+    )
 
     def __str__(self):
         return f"RFID: {self.sn} - {self.time_stamp}"
+    
+    
+class LiveRFIDTag(models.Model):
+    epc_code = models.CharField(max_length=255, unique=True)
+
+    office = models.ForeignKey(Office, on_delete=models.CASCADE)
+    sn = models.CharField(max_length=255)  # which reader saw it last
+
+    last_seen = models.DateTimeField()
+
+    def __str__(self):
+        return f"{self.epc_code} @ {self.last_seen}"
