@@ -276,13 +276,15 @@ class LiveTagStatusAPIView(APIView):
     def get(self, request):
         threshold = timezone.now() - timedelta(seconds=3)
 
-        live_subquery = LiveRFIDTag.objects.filter(
-            epc_code=OuterRef('epc_code'),
+        # ✅ Step 1: Get EPCs that are live
+        live_epcs = LiveRFIDTag.objects.filter(
             last_seen__gte=threshold
-        )
+        ).values_list("epc_code", flat=True)
 
-        tags = RFIDTag.objects.annotate(
-            is_live=Exists(live_subquery)
+        # ✅ Step 2: Get only those tags
+        tags = RFIDTag.objects.filter(
+            epc_code__in=live_epcs,
+            is_active=True
         )
 
         result = {}
@@ -293,9 +295,7 @@ class LiveTagStatusAPIView(APIView):
             result.setdefault(cat, []).append({
                 "epc": tag.epc_code,
                 "name": tag.name,
-                "live": tag.is_live,
-
-                # ✅ IMPORTANT PART
+                "live": True,  # always true now
                 "image": request.build_absolute_uri(tag.image.url)
                          if tag.image else None,
             })
