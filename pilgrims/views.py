@@ -283,16 +283,21 @@ class LiveTagStatusAPIView(APIView):
 
         tags = RFIDTag.objects.annotate(
             is_live=Exists(live_subquery)
-        ).values('epc_code', 'name', 'category', 'is_live')
+        )
 
         result = {}
 
         for tag in tags:
-            cat = tag['category'] or "Uncategorized"
+            cat = tag.category or "Uncategorized"
+
             result.setdefault(cat, []).append({
-                "epc": tag['epc_code'],
-                "name": tag['name'],
-                "live": tag['is_live']
+                "epc": tag.epc_code,
+                "name": tag.name,
+                "live": tag.is_live,
+
+                # ✅ IMPORTANT PART
+                "image": request.build_absolute_uri(tag.image.url)
+                         if tag.image else None,
             })
 
         return Response(result)
