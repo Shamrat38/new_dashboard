@@ -12,7 +12,7 @@ from django.utils import timezone
 from datetime import datetime, time
 
 from authentication.models import MyUser, Company
-from authentication.serializers import UserRegistrationSerializer, UserLoginSerializer, MyUserSerializer, CompanySerializer
+from authentication.serializers import UserRegistrationSerializer, UserLoginSerializer, MyUserSerializer
 from authentication.utils import standard_response, get_token_for_user
 
 
@@ -146,24 +146,3 @@ class ServerTime(APIView):
     def get(self, request):
         start_time, end_time = Current_saudi_time()
         return Response({"server_time": end_time.isoformat()})
-    
-class CompanyListView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, *args, **kwargs):
-        serializer = None
-        try:
-            company = Company.objects.only('name', 'logo').all()
-            serializer = CompanySerializer(company, many=True)
-        except Company.DoesNotExist:  # pylint: disable=no-member
-            return Response({
-                'success': False,
-                'message': 'Company not found.',
-                'data': None
-            }, status=status.HTTP_404_NOT_FOUND)
-
-        return Response({
-            'success': True,
-            'message': 'Company retrieved successfully.',
-            'results': serializer.data
-        }, status=status.HTTP_200_OK)
