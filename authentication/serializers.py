@@ -1,8 +1,36 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
-from authentication.models import MyUser
+from authentication.models import MyUser, Company
 
 from office.models import Office
+
+
+class CompanySerializer(serializers.ModelSerializer):
+    company_name = serializers.SerializerMethodField()
+    logo = serializers.SerializerMethodField()
+    icon = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Company
+        fields = ("id","company_name", "logo", "icon", "name", "name_ar")
+
+    def get_company_name(self, obj):
+        return obj.name
+
+
+    def get_logo(self, obj):
+        request = self.context.get('request')
+        if request and obj.logo:
+            return request.build_absolute_uri(obj.logo.url)
+        return None
+
+
+    def get_icon(self, obj):
+        request = self.context.get('request')
+        if request and obj.icon:
+            return request.build_absolute_uri(obj.icon.url)
+        return None
+    
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password2 = serializers.CharField(

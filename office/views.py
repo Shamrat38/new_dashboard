@@ -119,7 +119,7 @@ class OfficeApiView(APIView):
 
 
 class DashboardIllegalPilgrims(APIView):
-    permission_classes = []  # <-- keep or replace based on your security
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
 
