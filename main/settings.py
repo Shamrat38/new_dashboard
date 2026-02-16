@@ -292,8 +292,8 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Asia/Riyadh'
 
 CELERY_BEAT_SCHEDULE = {
-    "merge-pilgrims-every-second": {
-        "task": "pilgrims.tasks.merge_pilgrims_every_second",
-        "schedule": 1.0,
-    }
+    #"merge-pilgrims-every-second": {
+    #    "task": "pilgrims.tasks.merge_pilgrims_every_second",
+    #    "schedule": 1.0,
+    #}
 }
